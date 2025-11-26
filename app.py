@@ -48,6 +48,19 @@ class DLinear(nn.Module):
         seasonal_out = self.linear_seasonal(seasonal.permute(0, 2, 1)).permute(0, 2, 1)
         return trend_out + seasonal_out
 
+class LSTMModel(nn.Module):
+    def __init__(self, seq_len, pred_len, hidden_size=64, num_layers=2):
+        super().__init__()
+        self.pred_len = pred_len
+        self.lstm = nn.LSTM(1, hidden_size, num_layers, batch_first=True, dropout=0.2)
+        self.fc = nn.Linear(hidden_size, pred_len)
+    
+    def forward(self, x):
+        # x: (batch, seq_len, 1)
+        out, _ = self.lstm(x)
+        out = self.fc(out[:, -1, :])  # (batch, pred_len)
+        return out.unsqueeze(-1)  # (batch, pred_len, 1)
+
 # =============== Dataset ===============
 class StockDataset(Dataset):
     def __init__(self, data, seq_len, pred_len):
@@ -95,7 +108,7 @@ st.title("📈 Dự đoán giá cổ phiếu với NLinear/DLinear")
 # Sidebar
 st.sidebar.header("⚙️ Cấu hình")
 symbol = st.sidebar.text_input("Mã cổ phiếu", value="VNM")
-model_type = st.sidebar.selectbox("Mô hình", ["NLinear", "DLinear"])
+model_type = st.sidebar.selectbox("Mô hình", ["NLinear", "DLinear", "LSTM"])
 seq_len = st.sidebar.slider("Số ngày lookback", 30, 120, 60)
 pred_len = st.sidebar.slider("Số ngày dự đoán", 7, 60, 40)  # ~2 tháng
 epochs = st.sidebar.slider("Epochs", 50, 300, 100)
@@ -129,8 +142,10 @@ if st.sidebar.button("🚀 Bắt đầu dự đoán", type="primary"):
         
         if model_type == "NLinear":
             model = NLinear(seq_len, pred_len)
-        else:
+        elif model_type == "DLinear":
             model = DLinear(seq_len, pred_len)
+        else:
+            model = LSTMModel(seq_len, pred_len)
         
         model = train_model(model, loader, epochs, lr, progress_bar)
         st.success("✅ Training hoàn tất!")
@@ -196,11 +211,13 @@ if st.sidebar.button("🚀 Bắt đầu dự đoán", type="primary"):
         st.error(f"❌ Lỗi: {str(e)}")
 
 # Info section
-with st.expander("ℹ️ Về NLinear và DLinear"):
+with st.expander("ℹ️ Về NLinear, DLinear và LSTM"):
     st.markdown("""
     **NLinear**: Chuẩn hóa dữ liệu bằng cách trừ giá trị cuối, dùng linear layer dự đoán, rồi cộng lại.
     
     **DLinear**: Phân tách chuỗi thành trend và seasonal, dùng 2 linear layers riêng biệt.
+    
+    **LSTM**: Mạng Long Short-Term Memory, phù hợp cho dữ liệu chuỗi thời gian, có khả năng học các pattern dài hạn.
     
     ⚠️ **Lưu ý**: Đây chỉ là công cụ tham khảo, không phải khuyến nghị đầu tư.
     """)
