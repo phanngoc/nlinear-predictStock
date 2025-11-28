@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: answerme-db
+    environment:
+      POSTGRES_USER: answerme
+      POSTGRES_PASSWORD: answerme123
+      POSTGRES_DB: newsdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U answerme -d newsdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: answerme-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://answerme:answerme123@postgres:5432/newsdb
+      JWT_SECRET_KEY: your-secret-key-change-in-production
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      NEWS_DATA_PATH: /app/data
+    volumes:
+      - ../TrendNews/output:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

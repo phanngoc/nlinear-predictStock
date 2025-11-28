@@ -49,10 +49,44 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     fullname VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL DEFAULT 'user',  -- 'admin' or 'user'
+    subscription_type VARCHAR(50) DEFAULT 'free',  -- 'free' or 'premium' (for normal users only)
+    subscription_expires_at TIMESTAMP,  -- NULL for free users and admins
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT check_role CHECK (role IN ('admin', 'user')),
+    CONSTRAINT check_subscription CHECK (
+        (role = 'admin' AND subscription_type IS NULL AND subscription_expires_at IS NULL) OR
+        (role = 'user' AND subscription_type IN ('free', 'premium'))
+    )
 );
 ```
+
+**User Account Types:**
+
+1. **Admin Users** (`role = 'admin'`)
+   - Full system access
+   - Can manage all users and content
+   - No subscription required
+   - `subscription_type` and `subscription_expires_at` should be NULL
+
+2. **Normal Users** (`role = 'user'`)
+   - Limited access based on subscription type
+   
+   a. **Free Users** (`subscription_type = 'free'`)
+      - Basic features only
+      - Limited keywords (e.g., max 5)
+      - Limited chat history (e.g., last 30 days)
+      - Rate limiting on queries
+      - `subscription_expires_at` is NULL
+   
+   b. **Premium Users** (`subscription_type = 'premium'`)
+      - Full feature access
+      - Unlimited keywords
+      - Full chat history
+      - No rate limiting
+      - Priority support
+      - `subscription_expires_at` contains expiration date
 
 #### `keywords`
 ```sql
@@ -63,7 +97,15 @@ CREATE TABLE keywords (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, keyword)
 );
+
+-- Index for performance
+CREATE INDEX idx_keywords_user_id ON keywords(user_id);
 ```
+
+**Keyword Limits by User Type:**
+- Free users: Maximum 5 keywords
+- Premium users: Unlimited keywords
+- Admins: Unlimited keywords
 
 #### `threads`
 ```sql
@@ -134,15 +176,31 @@ AnswerMe/
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - Login and get JWT token
 - `GET /api/auth/me` - Get current user info
+- `PUT /api/auth/subscription` - Update subscription (admin only)
+- `POST /api/auth/upgrade` - Upgrade to premium (user self-service)
+- `GET /api/auth/subscription/status` - Check subscription status
 
 **Pydantic Schemas:**
 ```python
 from pydantic import BaseModel, EmailStr, Field
+from enum import Enum
+from datetime import datetime
+from typing import Optional
+
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    USER = "user"
+
+class SubscriptionType(str, Enum):
+    FREE = "free"
+    PREMIUM = "premium"
 
 class UserRegister(BaseModel):
     email: EmailStr
     fullname: str = Field(..., min_length=2, max_length=255)
     password: str = Field(..., min_length=6)
+    role: UserRole = UserRole.USER  # Default to normal user
+    subscription_type: Optional[SubscriptionType] = SubscriptionType.FREE  # Default to free
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -152,7 +210,34 @@ class UserResponse(BaseModel):
     id: int
     email: str
     fullname: str
+    role: UserRole
+    subscription_type: Optional[SubscriptionType]
+    subscription_expires_at: Optional[datetime]
     created_at: datetime
+    
+    # Helper properties
+    @property
+    def is_admin(self) -> bool:
+        return self.role == UserRole.ADMIN
+    
+    @property
+    def is_premium(self) -> bool:
+        if self.role == UserRole.ADMIN:
+            return True
+        return (
+            self.subscription_type == SubscriptionType.PREMIUM and
+            self.subscription_expires_at and
+            self.subscription_expires_at > datetime.utcnow()
+        )
+    
+    @property
+    def is_subscription_active(self) -> bool:
+        """Check if user has active premium subscription"""
+        if self.subscription_type == SubscriptionType.FREE:
+            return False
+        if self.subscription_expires_at is None:
+            return False
+        return self.subscription_expires_at > datetime.utcnow()
     
     class Config:
         from_attributes = True
@@ -161,6 +246,10 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+class SubscriptionUpdate(BaseModel):
+    subscription_type: SubscriptionType
+    duration_days: int = Field(default=30, gt=0)  # Duration in days for premium
 ```
 
 **Register Endpoint:**
@@ -172,21 +261,37 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # 2. Hash password
+    # 2. Validate role and subscription consistency
+    if user_data.role == UserRole.ADMIN and user_data.subscription_type:
+        raise HTTPException(
+            status_code=400, 
+            detail="Admin users cannot have subscription type"
+        )
+    
+    # 3. Hash password
     hashed_password = hash_password(user_data.password)
     
-    # 3. Create user
+    # 4. Create user
     new_user = User(
         email=user_data.email,
         fullname=user_data.fullname,
-        password_hash=hashed_password
+        password_hash=hashed_password,
+        role=user_data.role.value,
+        subscription_type=user_data.subscription_type.value if user_data.role == UserRole.USER else None,
+        subscription_expires_at=None  # Free users start with no expiration
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     
-    # 4. Generate JWT token
-    access_token = create_access_token(data={"sub": new_user.email, "user_id": new_user.id})
+    # 5. Generate JWT token
+    access_token = create_access_token(
+        data={
+            "sub": new_user.email, 
+            "user_id": new_user.id,
+            "role": new_user.role
+        }
+    )
     
     return {
         "access_token": access_token,
@@ -266,6 +371,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         user_id: int = payload.get("user_id")
+        role: str = payload.get("role")
         if email is None or user_id is None:
             raise credentials_exception
     except JWTError:
@@ -276,21 +382,73 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         raise credentials_exception
     
     return user
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency to require admin role"""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
+
+def require_premium(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency to require premium subscription or admin"""
+    if current_user.role == "admin":
+        return current_user
+    
+    if current_user.subscription_type != "premium":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Premium subscription required"
+        )
+    
+    # Check if subscription is still active
+    if current_user.subscription_expires_at:
+        from datetime import datetime
+        if current_user.subscription_expires_at < datetime.utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Premium subscription expired"
+            )
+    
+    return current_user
+
+def check_keyword_limit(user: User, db: Session):
+    """Check if user can add more keywords"""
+    if user.role == "admin" or user.subscription_type == "premium":
+        return True
+    
+    # Free users limited to 5 keywords
+    keyword_count = db.query(Keyword).filter(Keyword.user_id == user.id).count()
+    if keyword_count >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Free users can only have up to 5 keywords. Upgrade to premium for unlimited."
+        )
+    return True
 ```
 
 **Implementation tasks:**
-1. Create User database model (SQLAlchemy)
+1. Create User database model (SQLAlchemy) with role and subscription fields
 2. Create Pydantic schemas (UserRegister, UserLogin, UserResponse, TokenResponse)
-3. Implement password hashing with bcrypt (passlib)
-4. Implement password verification
-5. Generate JWT tokens with 7-day expiration
-6. Create register endpoint with email validation
-7. Create login endpoint with password verification
-8. Create get current user endpoint
-9. Add authentication middleware (HTTPBearer)
-10. Handle errors (duplicate email, invalid credentials)
-11. Add email format validation
-12. Add password strength validation (min 6 characters)
+3. Add UserRole and SubscriptionType enums
+4. Implement password hashing with bcrypt (passlib)
+5. Implement password verification
+6. Generate JWT tokens with 7-day expiration (include role in token)
+7. Create register endpoint with email validation and role/subscription validation
+8. Create login endpoint with password verification
+9. Create get current user endpoint
+10. Add authentication middleware (HTTPBearer)
+11. Add role-based authorization (require_admin, require_premium)
+12. Add keyword limit checks for free users
+13. Add subscription management endpoints
+14. Add subscription expiration checks
+15. Handle errors (duplicate email, invalid credentials, expired subscription)
+16. Add email format validation
+17. Add password strength validation (min 6 characters)
+18. Add subscription upgrade endpoint (for users to self-upgrade)
+19. Add admin endpoint to manage user subscriptions
 
 ---
 
@@ -299,7 +457,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 **File:** `backend/api/keywords.py`
 
 **Endpoints:**
-- `POST /api/keywords` - Add new keyword
+- `POST /api/keywords` - Add new keyword (check user's keyword limit)
 - `GET /api/keywords` - Get user's keywords
 - `DELETE /api/keywords/{id}` - Remove keyword
 
@@ -307,7 +465,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 1. Create CRUD operations for keywords table
 2. Validate keyword uniqueness per user
 3. Add authorization checks
-4. Return proper error messages
+4. **Enforce keyword limits (5 for free users, unlimited for premium/admin)**
+5. Return proper error messages when limit exceeded
+6. Add keyword count in response
 
 ---
 
@@ -475,10 +635,14 @@ class SummaryService:
 **File:** `backend/api/threads.py`
 
 **Endpoints:**
-- `GET /api/threads` - Get user's threads (paginated)
+- `GET /api/threads` - Get user's threads (paginated, with history limits for free users)
 - `GET /api/threads/today` - Get or generate today's summary thread
 - `GET /api/threads/{id}` - Get thread with messages
 - `DELETE /api/threads/{id}` - Delete thread
+
+**Thread History Limits:**
+- **Free users**: Can only access threads from last 30 days
+- **Premium users & Admins**: Full access to all historical threads
 
 **Implementation tasks:**
 1. Query threads by user_id
@@ -487,6 +651,9 @@ class SummaryService:
 4. Sort by date (newest first)
 5. Authorization checks
 6. Generate today's summary on-demand if not exists
+7. **Apply 30-day limit for free users when fetching threads**
+8. Add filter to exclude old threads for free users
+9. Return subscription status in response for UI to show upgrade prompts
 
 ---
 
@@ -495,7 +662,7 @@ class SummaryService:
 **File:** `backend/api/query.py`
 
 **Endpoints:**
-- `POST /api/threads/{id}/query` - Ask question in thread context
+- `POST /api/threads/{id}/query` - Ask question in thread context (with rate limiting for free users)
 
 **Request body:**
 ```json
@@ -513,6 +680,10 @@ class SummaryService:
 }
 ```
 
+**Rate Limiting:**
+- **Free users**: Max 10 queries per day
+- **Premium users & Admins**: Unlimited queries
+
 **Implementation tasks:**
 1. Validate thread ownership
 2. Load thread's date documents
@@ -521,6 +692,10 @@ class SummaryService:
 5. Save assistant response to database
 6. Return answer with sources
 7. Stream response support (optional)
+8. **Implement rate limiting for free users (10 queries/day)**
+9. Track daily query count in Redis or database
+10. Return rate limit info in response headers
+11. Provide clear error when limit exceeded
 
 ---
 
@@ -590,6 +765,9 @@ interface User {
   id: number
   email: string
   fullname: string
+  role: 'admin' | 'user'
+  subscription_type: 'free' | 'premium' | null
+  subscription_expires_at: string | null
   created_at: string
 }
 
@@ -597,17 +775,59 @@ interface AuthState {
   user: User | null
   token: string | null
   isAuthenticated: boolean
+  isAdmin: boolean
+  isPremium: boolean
+  subscriptionStatus: {
+    isActive: boolean
+    expiresAt: string | null
+    daysRemaining: number | null
+  }
   login: (email: string, password: string) => Promise<void>
   register: (email: string, fullname: string, password: string) => Promise<void>
   logout: () => void
   setUser: (user: User, token: string) => void
+  checkSubscription: () => void
 }
 
 export const useAuthStore = create<AuthState>()(persist(
-  (set) => ({
+  (set, get) => ({
     user: null,
     token: null,
     isAuthenticated: false,
+    isAdmin: false,
+    isPremium: false,
+    subscriptionStatus: {
+      isActive: false,
+      expiresAt: null,
+      daysRemaining: null
+    },
+    
+    checkSubscription: () => {
+      const user = get().user
+      if (!user) return
+      
+      const isAdmin = user.role === 'admin'
+      const isPremium = user.subscription_type === 'premium'
+      const expiresAt = user.subscription_expires_at
+      
+      let isActive = false
+      let daysRemaining = null
+      
+      if (isAdmin) {
+        isActive = true
+      } else if (isPremium && expiresAt) {
+        const now = new Date()
+        const expires = new Date(expiresAt)
+        isActive = expires > now
+        daysRemaining = Math.ceil((expires.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      }
+      
+      set({
+        isAdmin,
+        isPremium: isAdmin || (isPremium && isActive),
+        subscriptionStatus: { isActive, expiresAt, daysRemaining }
+      })
+    },
     
     login: async (email: string, password: string) => {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
@@ -623,6 +843,7 @@ export const useAuthStore = create<AuthState>()(persist(
       
       const data = await response.json()
       set({ user: data.user, token: data.access_token, isAuthenticated: true })
+      get().checkSubscription()
     },
     
     register: async (email: string, fullname: string, password: string) => {
@@ -639,14 +860,27 @@ export const useAuthStore = create<AuthState>()(persist(
       
       const data = await response.json()
       set({ user: data.user, token: data.access_token, isAuthenticated: true })
+      get().checkSubscription()
     },
     
     logout: () => {
-      set({ user: null, token: null, isAuthenticated: false })
+      set({ 
+        user: null, 
+        token: null, 
+        isAuthenticated: false,
+        isAdmin: false,
+        isPremium: false,
+        subscriptionStatus: {
+          isActive: false,
+          expiresAt: null,
+          daysRemaining: null
+        }
+      })
     },
     
     setUser: (user: User, token: string) => {
       set({ user, token, isAuthenticated: true })
+      get().checkSubscription()
     },
   }),
   {
@@ -876,16 +1110,22 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 **Implementation tasks:**
 1. Install shadcn/ui components (Button, Input, Label, Alert)
 2. Create Zustand auth store with persist middleware
-3. Implement login form with email/password fields
-4. Implement register form with email/fullname/password/confirm fields
-5. Add form validation (email format, password length, password match)
-6. Add loading states during API calls
-7. Add error handling and display
-8. Store JWT token in localStorage via Zustand persist
-9. Create protected route wrapper component
-10. Auto-redirect to dashboard after successful auth
-11. Auto-redirect to login if not authenticated
-12. Add logout functionality
+3. Add role and subscription fields to auth store
+4. Add subscription status computation (isAdmin, isPremium, daysRemaining)
+5. Implement login form with email/password fields
+6. Implement register form with email/fullname/password/confirm fields
+7. Add form validation (email format, password length, password match)
+8. Add loading states during API calls
+9. Add error handling and display
+10. Store JWT token in localStorage via Zustand persist
+11. Create protected route wrapper component
+12. Auto-redirect to dashboard after successful auth
+13. Auto-redirect to login if not authenticated
+14. Add logout functionality
+15. **Display user role and subscription status in UI**
+16. **Show upgrade prompt for free users**
+17. **Add subscription expiration warnings**
+18. **Create subscription management page**
 
 ---
 
@@ -902,6 +1142,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 3. Tag-style display
 4. Add/remove animations
 5. Error handling (duplicates, API errors)
+6. **Display keyword count and limit (e.g., "3/5 keywords used")**
+7. **Show upgrade banner when limit reached for free users**
+8. **Disable add button when limit reached (free users only)**
 
 **Implementation tasks:**
 1. Create keyword input component
@@ -910,6 +1153,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 4. API integration (add/remove)
 5. Optimistic updates
 6. Loading states
+7. **Add keyword limit display**
+8. **Show upgrade prompt when adding 6th keyword (free users)**
+9. **Display premium badge for unlimited keywords**
 
 ---
 
@@ -929,6 +1175,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 3. Click to open thread
 4. Infinite scroll/pagination
 5. Delete thread option
+6. **Display "Premium" badge on threads older than 30 days (visible to premium only)**
+7. **Show upgrade banner when free user tries to access old threads**
+8. **Gray out/lock old threads for free users**
 
 **Implementation tasks:**
 1. Fetch threads from API
@@ -938,6 +1187,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 5. Delete confirmation dialog
 6. Loading skeleton
 7. Empty state
+8. **Filter threads by date for free users (30-day limit)**
+9. **Add visual indicator for locked threads**
+10. **Show upgrade CTA for accessing full history**
 
 ---
 
@@ -955,6 +1207,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 4. Text input for questions
 5. Send button
 6. Loading indicator while AI responds
+7. **Query counter display (e.g., "7/10 queries today" for free users)**
+8. **Upgrade banner when approaching/reaching query limit**
+9. **Disable input when limit reached (free users)**
 
 **Implementation tasks:**
 1. Fetch thread messages
@@ -967,6 +1222,10 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 8. Scroll to bottom on new message
 9. Loading states
 10. Error handling
+11. **Track and display daily query count**
+12. **Show rate limit in UI**
+13. **Provide upgrade option when limit reached**
+14. **Add countdown timer for limit reset (midnight)**
 
 ---
 
@@ -1281,34 +1540,3 @@ print(response)
 
 Source: https://developers.llamaindex.ai/python/framework/understanding/putting_it_all_together/q_and_a#semantic-search
 
----
-
-## Overview
-Build chatbot summary tin tức từ các file .txt crawl được hàng ngày, sử dụng Llama Index để trả lời các truy vấn của người dùng. Khuynh hướng dùng giống feedly, lưu keyword người dùng quan tâm, summary các tin tức liên quan đến keyword đó để người dùng có thể đọc nhanh hằng ngày.
-
-## Backend
-- Tìm hiểu llama index , cách tích hợp làm chatbot summary tin tức từ các nguồn tin (*.txt) crawl được (từ folder outputs/{current day}/{file .txt mới nhất}) để trả lời query của người dùng . 
-- Code example: 
-```
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
-
-documents = SimpleDirectoryReader("./output/{current day}/{file .txt mới nhất}").load_data()
-index = VectorStoreIndex.from_documents(documents)
-query_engine = index.as_query_engine()
-response = query_engine.query("What did the author do growing up?")
-print(response)  . 
-
-```
-From source (https://developers.llamaindex.ai/python/framework/understanding/putting_it_all_together/q_and_a#semantic-search) . 
-
-## Các kĩ thuật frontend sử dụng.
-- Use (vite + nextjs) for UI, shacdn , zudtate for state management, tailwindcss for styling.
-- UI gồm 1 input để user nhập query, 1 button submit, 1 div để show kết quả trả lời từ chatbot.
-
-## Các kĩ thuật backend.
-- Use fastapi for backend server, uvicorn as server runner.
-- Use llama index để làm chatbot summary tin tức từ các file .txt crawl được hàng ngày
-- Dùng postgres để save user info, keyword user quan tâm, thời điểm user muốn nhận report hằng ngày.
-
-## Context code (backend python + frontend nextjs)
-AnswerMe
