@@ -22,6 +22,10 @@
 - Phân tích từ khóa và xu hướng
 - Thông báo qua Telegram/Email
 
+![News Trend Demo](image1.png)
+![Chatbot Demo](image2.png)
+
+
 ## 🚀 Cài Đặt
 
 ### Yêu Cầu
