@@ -82,7 +82,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   sendQuery: async (threadId: number, question: string) => {
-    const { data } = await api.post(`/api/threads/${threadId}/query`, { question })
+    const { data } = await api.post(`/api/query/${threadId}`, { question })
     set((state) => {
       if (!state.currentThread || state.currentThread.id !== threadId) return state
       return {

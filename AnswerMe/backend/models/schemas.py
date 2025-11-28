@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from enum import Enum
 from datetime import datetime
 from typing import Optional, List
@@ -15,7 +15,16 @@ class SubscriptionType(str, Enum):
 class UserRegister(BaseModel):
     email: EmailStr
     fullname: str = Field(..., min_length=2, max_length=255)
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=6, max_length=12)
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 6 or len(v) > 12:
+            raise ValueError('Password must be between 6 and 12 characters')
+        if len(v.encode('utf-8')) > 72:
+            raise ValueError('Password cannot exceed 72 bytes. Please use a shorter password.')
+        return v
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -79,7 +88,7 @@ class MessageResponse(BaseModel):
     id: int
     role: str
     content: str
-    metadata: Optional[dict] = None
+    meta_data: Optional[dict] = Field(None, serialization_alias="metadata")
     created_at: datetime
     
     class Config:

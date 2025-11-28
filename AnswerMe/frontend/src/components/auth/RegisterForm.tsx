@@ -8,6 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
+// Helper function to check password bytes length
+const getPasswordBytesLength = (password: string): number => {
+  return new TextEncoder().encode(password).length
+}
+
 export function RegisterForm() {
   const router = useRouter()
   const register = useAuthStore((state) => state.register)
@@ -21,6 +26,18 @@ export function RegisterForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    // Validate password length
+    if (password.length < 6 || password.length > 12) {
+      setError('Password must be between 6 and 12 characters')
+      return
+    }
+
+    // Validate password bytes length
+    if (getPasswordBytesLength(password) > 72) {
+      setError('Password cannot exceed 72 bytes. Please use a shorter password.')
+      return
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match')
@@ -50,11 +67,12 @@ export function RegisterForm() {
       </div>
       <div>
         <Label htmlFor="password">Password</Label>
-        <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} placeholder="••••••••" />
+        <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} maxLength={12} placeholder="••••••••" />
+        <p className="text-xs text-gray-500 mt-1">Password must be 6-12 characters and not exceed 72 bytes</p>
       </div>
       <div>
         <Label htmlFor="confirmPassword">Confirm Password</Label>
-        <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} placeholder="••••••••" />
+        <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} maxLength={12} placeholder="••••••••" />
       </div>
       {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
       <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Creating account...' : 'Register'}</Button>

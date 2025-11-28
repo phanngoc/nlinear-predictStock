@@ -6,8 +6,9 @@ from core.security import get_current_user
 from models.db_models import User, Thread, Message
 from models.schemas import QueryRequest, QueryResponse
 from services.llama_service import llama_service
+from scripts.check_and_crawl import check_and_crawl
 
-router = APIRouter(prefix="/api/threads", tags=["query"])
+router = APIRouter(prefix="/api/query", tags=["query"])
 
 # Simple in-memory rate limiting (use Redis in production)
 query_counts: dict = {}
@@ -34,7 +35,7 @@ def increment_query_count(user: User):
     key = f"{user.id}:{today}"
     query_counts[key] = query_counts.get(key, 0) + 1
 
-@router.post("/{thread_id}/query", response_model=QueryResponse)
+@router.post("/{thread_id}", response_model=QueryResponse)
 async def query_thread(
     thread_id: int,
     data: QueryRequest,
@@ -53,12 +54,25 @@ async def query_thread(
     # Check rate limit
     check_rate_limit(current_user)
     
+    # Kiểm tra và crawl nếu cần (chỉ cho ngày hôm nay)
+    from datetime import date
+    today = datetime.now().date()
+    if thread.date == today:
+        try:
+            crawl_result = check_and_crawl()
+            if crawl_result["status"] == "error":
+                print(f"⚠️ Cảnh báo: {crawl_result['message']}")
+        except Exception as e:
+            print(f"⚠️ Lỗi khi kiểm tra/crawl: {e}")
+    
     # Load documents for thread's date
-    date_str = thread.date.strftime("%Y年%m月%d日")
+    # Thử format mới trước: {YYYY}năm{MM}tháng{DD}ngày
+    date_str = thread.date.strftime("%Ynăm%mtháng%dngày")
     try:
         llama_service.load_documents(date_str)
     except FileNotFoundError:
-        date_str = thread.date.strftime("%Y-%m-%d")
+        # Thử format cũ: {YYYY}年{MM}月{DD}日
+        date_str = thread.date.strftime("%Y年%m月%d日")
         try:
             llama_service.load_documents(date_str)
         except FileNotFoundError:
@@ -69,9 +83,9 @@ async def query_thread(
     db.add(user_msg)
     db.flush()
     
-    # Query LlamaIndex
+    # Chat với LlamaIndex (có conversation history)
     try:
-        answer = llama_service.query(data.question)
+        answer = llama_service.chat(thread_id, data.question, date_str)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error querying: {str(e)}")
     
@@ -80,11 +94,14 @@ async def query_thread(
         thread_id=thread.id,
         role="assistant",
         content=answer,
-        metadata={"sources": []}
+        meta_data={"sources": []}
     )
     db.add(assistant_msg)
     db.commit()
     db.refresh(assistant_msg)
+    
+    # Xóa cache chat engine sau khi lưu message để đảm bảo history được cập nhật lần sau
+    llama_service.clear_chat_engine_cache(thread_id)
     
     # Increment rate limit counter
     increment_query_count(current_user)

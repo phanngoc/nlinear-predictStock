@@ -53,7 +53,7 @@ class Message(Base):
     thread_id = Column(Integer, ForeignKey("threads.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(50), nullable=False)
     content = Column(Text, nullable=False)
-    metadata = Column(JSONB, nullable=True)
+    meta_data = Column("metadata", JSONB, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     
     thread = relationship("Thread", back_populates="messages")

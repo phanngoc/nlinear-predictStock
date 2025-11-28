@@ -77,7 +77,7 @@ App available at http://localhost:3000
 - `DELETE /api/threads/{id}` - Delete thread
 
 ### Chat
-- `POST /api/threads/{id}/query` - Ask question
+- `POST /api/query/{id}` - Ask question
 
 ## User Types
 

@@ -54,7 +54,7 @@ cd ..
 # Run both services
 echo -e "${GREEN}✅ Starting services...${NC}"
 echo -e "Backend:  http://localhost:8000"
-echo -e "Frontend: http://localhost:3000"
+echo -e "Frontend: http://localhost:3005"
 echo -e "API Docs: http://localhost:8000/docs"
 echo ""
 

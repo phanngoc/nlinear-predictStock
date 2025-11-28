@@ -55,7 +55,7 @@ class SummaryService:
             thread_id=thread.id,
             role="assistant",
             content=content,
-            metadata={"summaries": summaries}
+            meta_data={"summaries": summaries}
         )
         self.db.add(message)
         self.db.commit()
