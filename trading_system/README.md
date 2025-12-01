@@ -2,6 +2,28 @@
 
 > Hệ thống giao dịch tích hợp 5 phases phân tích để đạt mục tiêu >30% annual return
 
+## 🚀 Quick Start
+
+### Run Streamlit UI
+```bash
+cd trading_system
+./run_app.sh
+# Or: streamlit run app_trading.py
+```
+Open http://localhost:8502
+
+### Command Line Analysis
+```bash
+# Quick analysis
+python analyze.py VNM
+
+# Market scan
+python analyze.py --scan
+
+# Deep analysis
+python deep_analyze.py FPT
+```
+
 ## 📊 Architecture Overview
 
 ```
