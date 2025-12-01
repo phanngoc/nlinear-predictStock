@@ -34,13 +34,19 @@ class VARModel:
         
         if auto_lag:
             # Select optimal lag using AIC
-            lag_order = model.select_order(maxlags=self.max_lags)
-            optimal_lag = lag_order.aic
+            try:
+                lag_order = model.select_order(maxlags=self.max_lags)
+                optimal_lag = lag_order.aic
+                # Ensure lag is at least 1
+                if optimal_lag is None or optimal_lag < 1:
+                    optimal_lag = 1
+            except:
+                optimal_lag = 1
         else:
             optimal_lag = 1
             
-        self.fitted = model.fit(optimal_lag)
-        self.lag_order = optimal_lag
+        self.fitted = model.fit(max(optimal_lag, 1))
+        self.lag_order = max(optimal_lag, 1)
         
         return self
     
@@ -53,8 +59,10 @@ class VARModel:
         """
         if self.fitted is None:
             raise ValueError("Model not fitted")
-            
-        fc = self.fitted.forecast(self.fitted.endog[-self.lag_order:], steps=steps)
+        
+        # Ensure lag_order is valid
+        lag = max(self.lag_order, 1)
+        fc = self.fitted.forecast(self.fitted.endog[-lag:], steps=steps)
         
         return pd.DataFrame(fc, columns=self.columns)
     

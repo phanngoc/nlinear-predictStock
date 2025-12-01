@@ -243,6 +243,11 @@ def main():
                 # Generate signal
                 engine = TradingEngine()
                 result = engine.generate_signal(prices_df, target)
+                
+                # Debug: check Phase 3
+                p3_debug = result['details'].get('multivariate', {})
+                if 'error' in p3_debug:
+                    st.warning(f"Phase 3 có lỗi: {p3_debug['error']}")
             
             # Display results
             st.header(f"📊 {target} Analysis")
@@ -397,16 +402,37 @@ def main():
                 st.markdown("*Phân tích quan hệ nhân quả và rủi ro đuôi*")
                 p3 = details.get('multivariate', {})
                 
-                c1, c2 = st.columns(2)
-                with c1:
-                    risk = p3.get('risk_level', 'N/A')
-                    risk_emoji = '🟢' if 'LOW' in str(risk) else '🔴' if 'HIGH' in str(risk) else '🟡'
-                    st.write(f"**Tail Risk:** {risk_emoji} {risk}")
-                    st.caption("Rủi ro crash dựa trên copula analysis")
-                with c2:
-                    indicators = p3.get('leading_indicators', [])[:3]
-                    st.write(f"**Leading Indicators:** {[l[0] for l in indicators]}")
-                    st.caption("CP dự báo được biến động của CP này")
+                # Check for error
+                if 'error' in p3:
+                    st.error(f"Phase 3 Error: {p3['error']}")
+                else:
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        risk = p3.get('risk_level', 'N/A')
+                        risk_emoji = '🟢' if 'LOW' in str(risk) else '🔴' if 'HIGH' in str(risk) else '🟡'
+                        st.write(f"**Tail Risk:** {risk_emoji} {risk}")
+                        st.caption("Rủi ro crash dựa trên copula analysis")
+                        
+                        # Show copula details
+                        copula = p3.get('components', {}).get('copula', {})
+                        if copula:
+                            lower = copula.get('avg_lower_tail', 0)
+                            upper = copula.get('avg_upper_tail', 0)
+                            st.caption(f"Lower tail: {lower:.2%}, Upper tail: {upper:.2%}")
+                    
+                    with c2:
+                        indicators = p3.get('leading_indicators', [])
+                        if indicators:
+                            st.write(f"**Leading Indicators:** {[f'{l[0]} (p={l[1]:.3f})' for l in indicators[:3]]}")
+                        else:
+                            # Try getting from granger component
+                            granger = p3.get('components', {}).get('granger', {})
+                            leaders = granger.get('leaders', [])
+                            if leaders:
+                                st.write(f"**Leading Indicators:** {[f'{l[0]}' for l in leaders[:3]]}")
+                            else:
+                                st.write("**Leading Indicators:** Không tìm thấy")
+                        st.caption("CP dự báo được biến động của CP này")
                 
                 st.markdown("### Phase 4: Pattern (Mẫu hình)")
                 st.markdown("*Phát hiện regime và anomaly*")
