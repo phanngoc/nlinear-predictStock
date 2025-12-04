@@ -8,10 +8,25 @@ from .anomaly_detector import AnomalyDetector
 class PatternSignals:
     """
     Aggregate signals từ pattern hunting:
-    - Regime detection
+    - Regime detection (4-state: Bull/Bear x High/Low Vol)
     - Factor alpha
     - Anomaly detection
+    
+    Vietnam Market Optimization:
+    - Higher regime weight (retail-dominated → clear trends)
+    - Sector rotation detection
+    - Mean reversion for sideways market
     """
+    
+    # Regime-specific component weights for Vietnam market
+    REGIME_COMPONENT_WEIGHTS = {
+        'BULL_LOW_VOL': {'regime': 0.40, 'factor': 0.35, 'anomaly': 0.25},
+        'BULL_HIGH_VOL': {'regime': 0.50, 'factor': 0.25, 'anomaly': 0.25},
+        'BEAR_HIGH_VOL': {'regime': 0.55, 'factor': 0.20, 'anomaly': 0.25},
+        'BEAR_LOW_VOL': {'regime': 0.45, 'factor': 0.30, 'anomaly': 0.25},
+        'SIDEWAYS': {'regime': 0.35, 'factor': 0.30, 'anomaly': 0.35},  # Anomaly more useful
+        'UNKNOWN': {'regime': 0.45, 'factor': 0.30, 'anomaly': 0.25}
+    }
     
     def __init__(self):
         self.regime = AdvancedRegimeDetector(n_regimes=4)
@@ -20,13 +35,14 @@ class PatternSignals:
         
     def generate(self, prices_df, returns_df, target_asset):
         """
-        Generate composite pattern signal
+        Generate composite pattern signal with adaptive weights
         """
         if target_asset not in prices_df.columns:
             return {'error': f'{target_asset} not found'}
             
         # Regime signal (use target prices)
         regime_signal = self.regime.get_signal(prices_df[target_asset].values)
+        current_regime = regime_signal.get('regime', 'UNKNOWN')
         
         # Factor alpha signal
         factor_signal = self.factor.get_alpha_signal(returns_df, target_asset)
@@ -34,8 +50,11 @@ class PatternSignals:
         # Anomaly signal
         anomaly_signal = self.anomaly.get_anomaly_signal(prices_df, returns_df, target_asset)
         
-        # Weighted composite
-        weights = {'regime': 0.45, 'factor': 0.30, 'anomaly': 0.25}
+        # Get adaptive weights based on current regime
+        weights = self.REGIME_COMPONENT_WEIGHTS.get(
+            current_regime, 
+            self.REGIME_COMPONENT_WEIGHTS['UNKNOWN']
+        )
         
         composite = (
             weights['regime'] * regime_signal['signal'] +
@@ -49,17 +68,24 @@ class PatternSignals:
             weights['anomaly'] * anomaly_signal['confidence']
         )
         
-        # Regime override
-        if regime_signal['regime'] == 'BEAR_HIGH_VOL':
-            composite = min(composite, 0)  # No long in crash
-        elif regime_signal['regime'] == 'BULL_LOW_VOL':
-            composite = max(composite, 0)  # No short in strong bull
+        # Regime override with gradual adjustment
+        if current_regime == 'BEAR_HIGH_VOL':
+            # Strong bearish override - limit long exposure
+            composite = min(composite, -0.2)
+        elif current_regime == 'BULL_LOW_VOL':
+            # Strong bullish override - limit short exposure  
+            composite = max(composite, 0.2)
+        elif current_regime == 'SIDEWAYS':
+            # In sideways, amplify mean reversion signals
+            if abs(composite) < 0.3:
+                composite *= 1.5  # Boost weak signals for mean reversion
             
         return {
             'signal': float(composite),
             'confidence': float(confidence),
-            'regime': regime_signal['regime'],
+            'regime': current_regime,
             'regime_action': regime_signal['action'],
+            'component_weights': weights,
             'components': {
                 'regime': regime_signal,
                 'factor': factor_signal,

@@ -18,10 +18,12 @@ class FoundationSignals:
     """
     
     def __init__(self, weights=None):
+        # Optimized for Vietnam market: HMM regime detection is critical
+        # due to high retail participation and momentum patterns
         self.weights = weights or {
-            'arima': 0.30,
-            'kalman': 0.25,
-            'hmm': 0.45  # Regime is most important
+            'arima': 0.25,   # Reduced: less effective in volatile VN market
+            'kalman': 0.20,  # Reduced: noise filtering less critical
+            'hmm': 0.55      # Increased: regime detection crucial for VN
         }
         
         self.arima = ARIMAModel()
@@ -122,6 +124,9 @@ class FoundationSignals:
                 'hmm': {
                     'signal': hmm_result['signal'],
                     'regime': hmm_result['regime_name'],
+                    'regime_name': hmm_result['regime_name'],
+                    'is_stable': hmm_result.get('is_stable', False),
+                    'regime_consistency': hmm_result.get('regime_consistency', 0),
                     'transition': hmm_result['transition'],
                     'probabilities': hmm_result['probabilities']
                 }

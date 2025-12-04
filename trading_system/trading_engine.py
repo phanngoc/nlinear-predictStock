@@ -27,9 +27,15 @@ class TradingEngine:
     - Multi-signal confirmation
     - Regime-aware position sizing
     - Risk management
+    
+    Vietnam Market Optimization:
+    - Adaptive weights based on market regime
+    - Higher emphasis on regime detection (retail-dominated)
+    - Enhanced lead-lag analysis (low liquidity market)
+    - Mean reversion signals for sideways markets
     """
     
-    def __init__(self, phase_weights: Optional[Dict] = None):
+    def __init__(self, phase_weights: Optional[Dict] = None, adaptive: bool = True):
         # Phase modules
         self.phase1 = FoundationSignals()
         self.phase2 = NetworkSignals()
@@ -37,17 +43,17 @@ class TradingEngine:
         self.phase4 = PatternSignals()
         self.phase5 = CryptoSignals()
         
-        # Core modules
-        self.aggregator = SignalAggregator(phase_weights)
+        # Core modules with adaptive weights
+        self.aggregator = SignalAggregator(phase_weights, adaptive=adaptive)
         self.risk_manager = RiskManager()
+        self.adaptive = adaptive
         
-        # Default weights
+        # Default weights optimized for Vietnam market
         self.phase_weights = phase_weights or {
             'foundation': 0.25,
-            'network': 0.20,
-            'multivariate': 0.20,
-            'pattern': 0.25,
-            'crypto': 0.10
+            'network': 0.25,
+            'multivariate': 0.15,
+            'pattern': 0.35
         }
         
     def prepare_data(self, prices_df: pd.DataFrame) -> Dict:
@@ -114,8 +120,11 @@ class TradingEngine:
         if include_crypto:
             signals['crypto'] = self.phase5.get_placeholder_signal()
         
-        # Aggregate signals
-        aggregated = self.aggregator.aggregate(signals)
+        # Get regime for adaptive weights
+        regime = signals.get('pattern', {}).get('regime', 'UNKNOWN')
+        
+        # Aggregate signals with adaptive weights based on regime
+        aggregated = self.aggregator.aggregate(signals, regime=regime)
         
         # Risk management
         current_price = prices[target_asset].iloc[-1]
@@ -142,6 +151,7 @@ class TradingEngine:
             'regime': regime,
             'position': position,
             'risk': stop_loss,
+            'weights_used': aggregated.get('weights_used', self.phase_weights),
             'phase_signals': {
                 phase: {
                     'signal': s.get('signal', 0),

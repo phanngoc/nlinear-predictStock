@@ -13,7 +13,20 @@ class NetworkSignals:
     1. Regime shift: Network density change
     2. Leader following: Trade laggers based on leaders
     3. Centrality: Focus on high-centrality stocks
+    
+    Vietnam Market Optimization:
+    - Higher lead-lag weight (70%) due to low liquidity → stronger lead-lag effects
+    - Sector clustering important (banking, real estate move together)
+    - Density changes signal risk-off earlier in VN market
     """
+    
+    # Regime-adaptive weights for Vietnam market
+    REGIME_WEIGHTS = {
+        'BULL': {'regime': 0.25, 'lag': 0.75},   # Follow leaders in uptrend
+        'BEAR': {'regime': 0.50, 'lag': 0.50},   # Equal weight in downtrend
+        'SIDEWAYS': {'regime': 0.35, 'lag': 0.65},
+        'UNKNOWN': {'regime': 0.30, 'lag': 0.70}
+    }
     
     def __init__(self, correlation_threshold=0.4):
         self.network_builder = CorrelationNetwork(threshold=correlation_threshold)
@@ -110,22 +123,38 @@ class NetworkSignals:
             'density_change': density_change
         }
     
-    def _aggregate_signals(self, regime_signal, lag_signal):
-        """Combine regime and lead-lag signals"""
-        w_regime = 0.4
-        w_lag = 0.6
+    def _aggregate_signals(self, regime_signal, lag_signal, market_regime='UNKNOWN'):
+        """
+        Combine regime and lead-lag signals with adaptive weights
+        Vietnam market: higher lead-lag weight due to low liquidity
+        """
+        # Get simplified regime for weight selection
+        if 'BULL' in market_regime:
+            regime_key = 'BULL'
+        elif 'BEAR' in market_regime:
+            regime_key = 'BEAR'
+        elif market_regime == 'SIDEWAYS':
+            regime_key = 'SIDEWAYS'
+        else:
+            regime_key = 'UNKNOWN'
+            
+        weights = self.REGIME_WEIGHTS.get(regime_key, self.REGIME_WEIGHTS['UNKNOWN'])
         
         signal = (
-            w_regime * regime_signal['signal'] +
-            w_lag * lag_signal['signal']
+            weights['regime'] * regime_signal['signal'] +
+            weights['lag'] * lag_signal['signal']
         )
         
         confidence = (
-            w_regime * regime_signal['confidence'] +
-            w_lag * lag_signal['confidence']
+            weights['regime'] * regime_signal['confidence'] +
+            weights['lag'] * lag_signal['confidence']
         )
         
-        return {'signal': signal, 'confidence': confidence}
+        return {
+            'signal': signal, 
+            'confidence': confidence,
+            'weights_used': weights
+        }
     
     def detect_regime_shift(self, returns_df, windows=[30, 60, 90]):
         """

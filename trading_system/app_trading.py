@@ -282,20 +282,24 @@ def main():
             
             st.markdown("""
             <div style="background-color: #e8f4ea; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-            <b>📖 Cách đọc:</b> Mỗi phase đóng góp vào signal cuối cùng với trọng số khác nhau.
+            <b>📖 Cách đọc:</b> Mỗi phase đóng góp vào signal cuối cùng với trọng số <b>thích ứng theo regime</b>.
             <span style="color:green">Xanh</span> = bullish, <span style="color:red">Đỏ</span> = bearish.
+            <br><i>🇻🇳 Tối ưu cho thị trường Việt Nam: Lead-lag và Regime detection được ưu tiên.</i>
             </div>
             """, unsafe_allow_html=True)
             
             fig = plot_phase_signals(result['phase_signals'])
             st.plotly_chart(fig, use_container_width=True)
             
-            # Phase contribution breakdown
-            st.markdown("**Đóng góp của từng Phase vào Signal cuối:**")
-            weights = {'foundation': 0.25, 'network': 0.20, 'multivariate': 0.20, 'pattern': 0.35}
+            # Phase contribution breakdown with adaptive weights
+            st.markdown("**Đóng góp của từng Phase vào Signal cuối (Adaptive Weights):**")
+            
+            # Get actual weights used from result
+            weights = result.get('weights_used', {'foundation': 0.25, 'network': 0.25, 'multivariate': 0.15, 'pattern': 0.35})
             
             contrib_data = []
-            for phase, w in weights.items():
+            for phase in ['foundation', 'network', 'multivariate', 'pattern']:
+                w = weights.get(phase, 0)
                 sig = result['phase_signals'].get(phase, {}).get('signal', 0)
                 contribution = sig * w
                 contrib_data.append({

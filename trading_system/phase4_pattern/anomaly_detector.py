@@ -10,9 +10,26 @@ class AnomalyDetector:
     - Statistical arbitrage opportunities
     - Pair deviations
     - Cross-asset anomalies
+    - Liquidity anomalies (important for Vietnam market)
+    - Sector rotation signals
+    
+    Vietnam Market Optimization:
+    - Lower z-threshold (1.8) due to higher volatility
+    - Sector-based anomaly detection (banking, real estate clusters)
+    - Volume-based confirmation for low liquidity market
     """
     
-    def __init__(self, z_threshold=2.0):
+    # Sector mapping for Vietnam market
+    VN_SECTORS = {
+        'banking': ['VCB', 'BID', 'CTG', 'TCB', 'MBB', 'ACB', 'VPB', 'HDB', 'TPB', 'STB'],
+        'real_estate': ['VIC', 'VHM', 'NVL', 'KDH', 'DXG', 'PDR', 'NLG'],
+        'retail': ['MWG', 'FRT', 'PNJ', 'DGW'],
+        'tech': ['FPT', 'CMG'],
+        'steel': ['HPG', 'HSG', 'NKG'],
+        'energy': ['GAS', 'POW', 'PVD', 'PVS']
+    }
+    
+    def __init__(self, z_threshold=1.8):  # Lowered for VN market volatility
         self.z_threshold = z_threshold
         
     def detect_pair_anomaly(self, series1, series2, window=60):
@@ -134,8 +151,10 @@ class AnomalyDetector:
     def get_anomaly_signal(self, prices_df, returns_df, target_asset):
         """
         Generate signal from anomaly detection
+        Optimized for Vietnam market with sector rotation and liquidity signals
         """
         signals = []
+        signal_weights = []
         
         # Pair anomalies involving target
         pair_anomalies = self.scan_pair_anomalies(prices_df)
@@ -146,27 +165,41 @@ class AnomalyDetector:
                 else:
                     sig = -0.5 if anom['pair'][0] == target_asset else 0.5
                 signals.append(sig * min(abs(anom['z_score']) / 3, 1))
+                signal_weights.append(1.0)
                 
-        # Momentum anomaly
+        # Momentum anomaly - with mean reversion for VN market
         mom_anomalies = self.detect_momentum_anomaly(returns_df)
         for anom in mom_anomalies:
             if anom['asset'] == target_asset:
-                # Mean reversion: fade extreme momentum
-                sig = -0.3 if anom['type'] == 'MOMENTUM_WINNER' else 0.3
+                # Mean reversion: fade extreme momentum (stronger in VN)
+                sig = -0.4 if anom['type'] == 'MOMENTUM_WINNER' else 0.4
                 signals.append(sig)
+                signal_weights.append(1.2)  # Higher weight for momentum in VN
                 
         # Volatility anomaly
         vol_anomalies = self.detect_volatility_anomaly(returns_df)
         for anom in vol_anomalies:
             if anom['asset'] == target_asset:
                 if anom['type'] == 'VOL_SPIKE':
-                    signals.append(-0.2)  # Reduce in high vol
+                    signals.append(-0.3)  # Stronger reduce signal
+                    signal_weights.append(1.5)  # High weight for vol spike
+                elif anom['type'] == 'VOL_COMPRESSION':
+                    signals.append(0.2)  # Prepare for breakout
+                    signal_weights.append(0.8)
+        
+        # Sector rotation signal (VN-specific)
+        sector_signal = self._detect_sector_rotation(returns_df, target_asset)
+        if sector_signal['signal'] != 0:
+            signals.append(sector_signal['signal'])
+            signal_weights.append(1.0)
                     
         if not signals:
             return {'signal': 0, 'confidence': 0.5, 'anomalies': []}
-            
-        composite = np.mean(signals)
-        confidence = min(len(signals) * 0.2 + 0.3, 1.0)
+        
+        # Weighted average of signals
+        total_weight = sum(signal_weights)
+        composite = sum(s * w for s, w in zip(signals, signal_weights)) / total_weight
+        confidence = min(len(signals) * 0.15 + 0.4, 1.0)
         
         return {
             'signal': float(composite),
@@ -174,5 +207,56 @@ class AnomalyDetector:
             'n_anomalies': len(signals),
             'pair_anomalies': [a for a in pair_anomalies if target_asset in a['pair']],
             'momentum_anomalies': [a for a in mom_anomalies if a['asset'] == target_asset],
-            'vol_anomalies': [a for a in vol_anomalies if a['asset'] == target_asset]
+            'vol_anomalies': [a for a in vol_anomalies if a['asset'] == target_asset],
+            'sector_rotation': sector_signal
+        }
+    
+    def _detect_sector_rotation(self, returns_df, target_asset, lookback=20):
+        """
+        Detect sector rotation signals for Vietnam market
+        If sector is outperforming/underperforming, generate signal
+        """
+        # Find which sector the target belongs to
+        target_sector = None
+        sector_stocks = []
+        
+        for sector, stocks in self.VN_SECTORS.items():
+            if target_asset in stocks:
+                target_sector = sector
+                sector_stocks = [s for s in stocks if s in returns_df.columns]
+                break
+        
+        if not target_sector or len(sector_stocks) < 2:
+            return {'signal': 0, 'sector': None, 'relative_strength': 0}
+        
+        # Calculate sector vs market performance
+        recent_returns = returns_df.iloc[-lookback:]
+        
+        sector_return = recent_returns[sector_stocks].mean(axis=1).sum()
+        market_return = recent_returns.mean(axis=1).sum()
+        
+        relative_strength = sector_return - market_return
+        
+        # Target vs sector
+        target_return = recent_returns[target_asset].sum()
+        target_vs_sector = target_return - sector_return
+        
+        # Generate signal
+        signal = 0
+        if relative_strength > 0.05:  # Sector outperforming
+            if target_vs_sector < -0.03:  # Target lagging sector
+                signal = 0.3  # Catch-up trade
+            elif target_vs_sector > 0.05:  # Target leading
+                signal = -0.2  # Take profit
+        elif relative_strength < -0.05:  # Sector underperforming
+            if target_vs_sector > 0.03:  # Target outperforming weak sector
+                signal = -0.3  # Mean reversion
+            elif target_vs_sector < -0.05:  # Target worst in weak sector
+                signal = 0.2  # Oversold bounce
+        
+        return {
+            'signal': float(signal),
+            'sector': target_sector,
+            'relative_strength': float(relative_strength),
+            'target_vs_sector': float(target_vs_sector)
         }
