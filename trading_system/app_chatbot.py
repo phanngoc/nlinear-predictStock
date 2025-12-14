@@ -27,13 +27,15 @@ def main():
         chat_page.render,
         title="Chat",
         icon="💬",
+        url_path="chat",
         default=True
     )
     
     info = st.Page(
         info_page.render,
         title="News Info",
-        icon="📰"
+        icon="📰",
+        url_path="info"
     )
     
     # Create navigation
