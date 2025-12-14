@@ -4,18 +4,18 @@ import pandas as pd
 from typing import Dict, Optional
 
 try:
-    from .phase1_foundation import FoundationSignals
-    from .phase2_network import NetworkSignals
-    from .phase3_multivariate import MultivariateSignals
-    from .phase4_pattern import PatternSignals
-    from .phase5_crypto import CryptoSignals
+    from .foundation import FoundationSignals
+    from .network import NetworkSignals
+    from .multivariate import MultivariateSignals
+    from .pattern import PatternSignals
+    from .crypto import CryptoSignals
     from .core import SignalAggregator, RiskManager
 except ImportError:
-    from phase1_foundation import FoundationSignals
-    from phase2_network import NetworkSignals
-    from phase3_multivariate import MultivariateSignals
-    from phase4_pattern import PatternSignals
-    from phase5_crypto import CryptoSignals
+    from foundation import FoundationSignals
+    from network import NetworkSignals
+    from multivariate import MultivariateSignals
+    from pattern import PatternSignals
+    from crypto import CryptoSignals
     from core import SignalAggregator, RiskManager
 
 
@@ -36,12 +36,12 @@ class TradingEngine:
     """
     
     def __init__(self, phase_weights: Optional[Dict] = None, adaptive: bool = True):
-        # Phase modules
-        self.phase1 = FoundationSignals()
-        self.phase2 = NetworkSignals()
-        self.phase3 = MultivariateSignals()
-        self.phase4 = PatternSignals()
-        self.phase5 = CryptoSignals()
+        # Signal modules
+        self.foundation = FoundationSignals()
+        self.network = NetworkSignals()
+        self.multivariate = MultivariateSignals()
+        self.pattern = PatternSignals()
+        self.crypto = CryptoSignals()
         
         # Core modules with adaptive weights
         self.aggregator = SignalAggregator(phase_weights, adaptive=adaptive)
@@ -90,35 +90,35 @@ class TradingEngine:
         
         signals = {}
         
-        # Phase 1: Foundation
+        # Foundation Module
         try:
-            signals['foundation'] = self.phase1.generate(
+            signals['foundation'] = self.foundation.generate(
                 prices[target_asset].values
             )
         except Exception as e:
             signals['foundation'] = {'signal': 0, 'confidence': 0, 'error': str(e)}
             
-        # Phase 2: Network
+        # Network Module
         try:
-            signals['network'] = self.phase2.generate(returns, target_asset)
+            signals['network'] = self.network.generate(returns, target_asset)
         except Exception as e:
             signals['network'] = {'signal': 0, 'confidence': 0, 'error': str(e)}
             
-        # Phase 3: Multivariate
+        # Multivariate Module
         try:
-            signals['multivariate'] = self.phase3.generate(returns, target_asset)
+            signals['multivariate'] = self.multivariate.generate(returns, target_asset)
         except Exception as e:
             signals['multivariate'] = {'signal': 0, 'confidence': 0, 'error': str(e)}
             
-        # Phase 4: Pattern
+        # Pattern Module
         try:
-            signals['pattern'] = self.phase4.generate(prices, returns, target_asset)
+            signals['pattern'] = self.pattern.generate(prices, returns, target_asset)
         except Exception as e:
             signals['pattern'] = {'signal': 0, 'confidence': 0, 'error': str(e)}
             
-        # Phase 5: Crypto (optional)
+        # Crypto Module (optional)
         if include_crypto:
-            signals['crypto'] = self.phase5.get_placeholder_signal()
+            signals['crypto'] = self.crypto.get_placeholder_signal()
         
         # Get regime for adaptive weights
         regime = signals.get('pattern', {}).get('regime', 'UNKNOWN')

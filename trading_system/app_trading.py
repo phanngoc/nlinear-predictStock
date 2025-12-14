@@ -11,7 +11,7 @@ from data_loader import VNStockLoader, VN30_SYMBOLS, BLUECHIP_SYMBOLS
 from trading_engine import TradingEngine
 
 st.set_page_config(
-    page_title="Trading System - 5 Phases",
+    page_title="Trading System - 5 Modules",
     page_icon="📈",
     layout="wide"
 )
@@ -137,35 +137,35 @@ def show_signal_explanation():
         ### 📊 Công thức tính Signal tổng hợp
         
         ```
-        Final Signal = 0.25 × Phase1 + 0.20 × Phase2 + 0.20 × Phase3 + 0.35 × Phase4
+        Final Signal = 0.25 × Foundation + 0.20 × Network + 0.20 × Multivariate + 0.35 × Pattern
         ```
         
-        | Phase | Trọng số | Phân tích |
+        | Module | Trọng số | Phân tích |
         |-------|----------|-----------|
-        | **Phase 1: Foundation** | 25% | ARIMA (dự báo), Kalman (lọc nhiễu), HMM (xu hướng) |
-        | **Phase 2: Network** | 20% | Mối quan hệ giữa các cổ phiếu, cổ phiếu dẫn dắt |
-        | **Phase 3: Multivariate** | 20% | VAR, Granger causality, rủi ro đuôi (tail risk) |
-        | **Phase 4: Pattern** | 35% | Regime (Bull/Bear), Factor model, Anomaly |
+        | **Foundation** | 25% | ARIMA (dự báo), Kalman (lọc nhiễu), HMM (xu hướng) |
+        | **Network** | 20% | Mối quan hệ giữa các cổ phiếu, cổ phiếu dẫn dắt |
+        | **Multivariate** | 20% | VAR, Granger causality, rủi ro đuôi (tail risk) |
+        | **Pattern** | 35% | Regime (Bull/Bear), Factor model, Anomaly |
         
         ---
         
-        ### 🔍 Chi tiết từng Phase
+        ### 🔍 Chi tiết từng Module
         
-        **Phase 1 - Foundation (Nền tảng):**
+        **Foundation (Nền tảng):**
         - **ARIMA**: Dự báo giá ngắn hạn (1-5 ngày). Signal > 0 = giá sẽ tăng
         - **Kalman Filter**: So sánh giá thực vs giá "thật". Z-score > 2 = đang overvalued
         - **HMM Regime**: Xác định thị trường Bull/Bear/Sideways
         
-        **Phase 2 - Network (Mạng lưới):**
+        **Network (Mạng lưới):**
         - **Density Change**: Tăng = các CP tương quan cao hơn = Risk-off
         - **Lead-Lag**: Tìm CP dẫn dắt để dự đoán CP theo sau
         
-        **Phase 3 - Multivariate (Đa biến):**
+        **Multivariate (Đa biến):**
         - **VAR**: Dự báo dựa trên nhiều CP cùng lúc
         - **Granger**: Tìm CP nào "gây ra" biến động CP khác
         - **Copula**: Đo rủi ro crash (tail dependency)
         
-        **Phase 4 - Pattern (Mẫu hình):**
+        **Pattern (Mẫu hình):**
         - **4-State Regime**: Bull/Bear × High/Low Volatility
         - **Factor Model**: Tìm alpha từ residual (CP undervalued/overvalued)
         - **Anomaly**: Phát hiện bất thường thống kê
@@ -195,7 +195,7 @@ def show_signal_explanation():
 
 def main():
     st.title("📈 Advanced Trading System")
-    st.markdown("*5-Phase Analysis for Vietnam Stock Market*")
+    st.markdown("*5-Module Analysis for Vietnam Stock Market*")
     
     # Show explanation at top
     show_signal_explanation()
@@ -244,10 +244,10 @@ def main():
                 engine = TradingEngine()
                 result = engine.generate_signal(prices_df, target)
                 
-                # Debug: check Phase 3
+                # Debug: check Multivariate
                 p3_debug = result['details'].get('multivariate', {})
                 if 'error' in p3_debug:
-                    st.warning(f"Phase 3 có lỗi: {p3_debug['error']}")
+                    st.warning(f"Multivariate có lỗi: {p3_debug['error']}")
             
             # Display results
             st.header(f"📊 {target} Analysis")
@@ -277,12 +277,12 @@ def main():
                 fig = plot_signal_gauge(result['signal'], result['confidence'])
                 st.plotly_chart(fig, use_container_width=True)
             
-            # Phase signals with explanation
-            st.subheader("📊 Phase Signals")
+            # Module signals with explanation
+            st.subheader("📊 Module Signals")
             
             st.markdown("""
             <div style="background-color: #e8f4ea; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-            <b>📖 Cách đọc:</b> Mỗi phase đóng góp vào signal cuối cùng với trọng số <b>thích ứng theo regime</b>.
+            <b>📖 Cách đọc:</b> Mỗi module đóng góp vào signal cuối cùng với trọng số <b>thích ứng theo regime</b>.
             <span style="color:green">Xanh</span> = bullish, <span style="color:red">Đỏ</span> = bearish.
             <br><i>🇻🇳 Tối ưu cho thị trường Việt Nam: Lead-lag và Regime detection được ưu tiên.</i>
             </div>
@@ -291,8 +291,8 @@ def main():
             fig = plot_phase_signals(result['phase_signals'])
             st.plotly_chart(fig, use_container_width=True)
             
-            # Phase contribution breakdown with adaptive weights
-            st.markdown("**Đóng góp của từng Phase vào Signal cuối (Adaptive Weights):**")
+            # Module contribution breakdown with adaptive weights
+            st.markdown("**Đóng góp của từng Module vào Signal cuối (Adaptive Weights):**")
             
             # Get actual weights used from result
             weights = result.get('weights_used', {'foundation': 0.25, 'network': 0.25, 'multivariate': 0.15, 'pattern': 0.35})
@@ -367,7 +367,7 @@ def main():
             with st.expander("📋 Chi tiết phân tích từng Phase"):
                 details = result['details']
                 
-                st.markdown("### Phase 1: Foundation (Nền tảng)")
+                st.markdown("### Foundation (Nền tảng)")
                 st.markdown("*Phân tích chuỗi thời gian: dự báo xu hướng ngắn hạn*")
                 p1 = details.get('foundation', {})
                 if 'components' in p1:
@@ -388,7 +388,7 @@ def main():
                         st.metric("HMM", f"{hmm_sig:+.3f} ({hmm_regime})",
                                  help="Xác định xu hướng Bull/Bear/Sideways")
                 
-                st.markdown("### Phase 2: Network (Mạng lưới)")
+                st.markdown("### Network (Mạng lưới)")
                 st.markdown("*Phân tích mối quan hệ giữa các cổ phiếu*")
                 p2 = details.get('network', {})
                 stats = p2.get('network_stats', {})
@@ -402,13 +402,13 @@ def main():
                     st.write(f"**Market Leaders:** {[l[0] for l in leaders]}")
                     st.caption("CP có ảnh hưởng lớn nhất trong network")
                 
-                st.markdown("### Phase 3: Multivariate (Đa biến)")
+                st.markdown("### Multivariate (Đa biến)")
                 st.markdown("*Phân tích quan hệ nhân quả và rủi ro đuôi*")
                 p3 = details.get('multivariate', {})
                 
                 # Check for error
                 if 'error' in p3:
-                    st.error(f"Phase 3 Error: {p3['error']}")
+                    st.error(f"Multivariate Error: {p3['error']}")
                 else:
                     c1, c2 = st.columns(2)
                     with c1:
@@ -438,7 +438,7 @@ def main():
                                 st.write("**Leading Indicators:** Không tìm thấy")
                         st.caption("CP dự báo được biến động của CP này")
                 
-                st.markdown("### Phase 4: Pattern (Mẫu hình)")
+                st.markdown("### Pattern (Mẫu hình)")
                 st.markdown("*Phát hiện regime và anomaly*")
                 p4 = details.get('pattern', {})
                 

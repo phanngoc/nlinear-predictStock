@@ -1,4 +1,4 @@
-"""Pattern Signals - Aggregate Phase 4"""
+"""Pattern Signals - Aggregate Pattern Module"""
 import numpy as np
 from .regime_detector import AdvancedRegimeDetector
 from .factor_model import FactorModel

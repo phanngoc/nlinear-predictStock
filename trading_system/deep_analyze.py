@@ -5,10 +5,10 @@ import warnings
 warnings.filterwarnings('ignore')
 
 from data_loader import VNStockLoader
-from phase1_foundation import FoundationSignals
-from phase2_network import NetworkSignals
-from phase3_multivariate import MultivariateSignals
-from phase4_pattern import PatternSignals
+from foundation import FoundationSignals
+from network import NetworkSignals
+from multivariate import MultivariateSignals
+from pattern import PatternSignals
 
 
 def deep_analyze(target: str):
@@ -36,9 +36,9 @@ def deep_analyze(target: str):
     print(f"\nCurrent Price: {current_price:,.0f} VND")
     print(f"Data Points: {len(prices_df)}")
     
-    # ========== PHASE 1 ==========
+    # ========== FOUNDATION ==========
     print(f"\n{'='*60}")
-    print("📈 PHASE 1: FOUNDATION (Time Series)")
+    print("📈 FOUNDATION (Time Series)")
     print(f"{'='*60}")
     
     p1 = FoundationSignals()
@@ -69,9 +69,9 @@ def deep_analyze(target: str):
     probs = comp['hmm']['probabilities']
     print(f"     Probabilities: Bull={probs['bull']:.1%}, Bear={probs['bear']:.1%}, Sideways={probs['sideways']:.1%}")
     
-    # ========== PHASE 2 ==========
+    # ========== NETWORK ==========
     print(f"\n{'='*60}")
-    print("🕸️  PHASE 2: NETWORK ANALYSIS")
+    print("🕸️  NETWORK ANALYSIS")
     print(f"{'='*60}")
     
     p2 = NetworkSignals()
@@ -95,9 +95,9 @@ def deep_analyze(target: str):
     for leader, score in r2['leaders'][:3]:
         print(f"     {leader}: {score:.3f}")
     
-    # ========== PHASE 3 ==========
+    # ========== MULTIVARIATE ==========
     print(f"\n{'='*60}")
-    print("📊 PHASE 3: MULTIVARIATE ANALYSIS")
+    print("📊 MULTIVARIATE ANALYSIS")
     print(f"{'='*60}")
     
     p3 = MultivariateSignals()
@@ -123,9 +123,9 @@ def deep_analyze(target: str):
     print(f"     Signal: {copula['signal']:+.3f}")
     print(f"     Risk Level: {copula['risk_level']}")
     
-    # ========== PHASE 4 ==========
+    # ========== PATTERN ==========
     print(f"\n{'='*60}")
-    print("🔍 PHASE 4: PATTERN HUNTING")
+    print("🔍 PATTERN HUNTING")
     print(f"{'='*60}")
     
     p4 = PatternSignals()

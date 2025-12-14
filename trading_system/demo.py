@@ -57,7 +57,7 @@ def demo_single_asset():
     print(f"Action: {result['action']}")
     print(f"Regime: {result['regime']}")
     
-    print("\nPhase Signals:")
+    print("\nModule Signals:")
     for phase, sig in result['phase_signals'].items():
         print(f"  {phase}: signal={sig['signal']:.3f}, conf={sig['confidence']:.3f}")
         
@@ -122,10 +122,10 @@ def demo_backtest():
     print(f"  Sharpe Estimate: {result['sharpe_estimate']:.2f}")
 
 
-def demo_phase_details():
-    """Demo: Detailed phase analysis"""
+def demo_module_details():
+    """Demo: Detailed module analysis"""
     print("\n" + "=" * 60)
-    print("DEMO: Detailed Phase Analysis")
+    print("DEMO: Detailed Module Analysis")
     print("=" * 60)
     
     prices_df = generate_sample_market()
@@ -133,24 +133,24 @@ def demo_phase_details():
     
     result = engine.generate_signal(prices_df, 'FPT')
     
-    print("\n--- Phase 1: Foundation ---")
+    print("\n--- Foundation ---")
     p1 = result['details'].get('foundation', {})
     print(f"Signal: {p1.get('signal', 'N/A')}")
     print(f"Regime: {p1.get('regime', 'N/A')}")
     print(f"Strategy: {p1.get('recommended_strategy', 'N/A')}")
     
-    print("\n--- Phase 2: Network ---")
+    print("\n--- Network ---")
     p2 = result['details'].get('network', {})
     print(f"Signal: {p2.get('signal', 'N/A')}")
     stats = p2.get('network_stats', {})
     print(f"Network Density: {stats.get('density', 'N/A')}")
     
-    print("\n--- Phase 3: Multivariate ---")
+    print("\n--- Multivariate ---")
     p3 = result['details'].get('multivariate', {})
     print(f"Signal: {p3.get('signal', 'N/A')}")
     print(f"Risk Level: {p3.get('risk_level', 'N/A')}")
     
-    print("\n--- Phase 4: Pattern ---")
+    print("\n--- Pattern ---")
     p4 = result['details'].get('pattern', {})
     print(f"Signal: {p4.get('signal', 'N/A')}")
     print(f"Regime: {p4.get('regime', 'N/A')}")
@@ -160,13 +160,13 @@ def demo_phase_details():
 if __name__ == '__main__':
     print("\n" + "=" * 60)
     print("ADVANCED TRADING SYSTEM - FULL DEMO")
-    print("5 Phases Integration")
+    print("5 Modules Integration")
     print("=" * 60)
     
     demo_single_asset()
     demo_market_scan()
     demo_backtest()
-    demo_phase_details()
+    demo_module_details()
     
     print("\n" + "=" * 60)
     print("DEMO COMPLETED!")

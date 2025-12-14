@@ -20,3 +20,12 @@ arch
 
 # Utilities
 scipy
+
+# LlamaIndex for RAG Chatbot
+llama-index>=0.12.0
+llama-index-llms-openai
+openai
+
+# Configuration
+python-dotenv
+pydantic-settings

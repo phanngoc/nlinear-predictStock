@@ -88,8 +88,8 @@ def analyze_stock(target: str, peers: list = None):
     print(f"Confidence: {confidence:.1%}")
     print(f"Regime:     {result['regime']}")
     
-    # Phase breakdown
-    print(f"\n📊 Phase Signals:")
+    # Module breakdown
+    print(f"\n📊 Module Signals:")
     for phase, sig in result['phase_signals'].items():
         s = sig['signal']
         c = sig['confidence']

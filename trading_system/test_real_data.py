@@ -139,7 +139,7 @@ def test_detailed_analysis():
     details = result['details']
     
     # Phase 1
-    print(f"\n--- Phase 1: Foundation ---")
+    print(f"\n--- Foundation ---")
     p1 = details.get('foundation', {})
     if 'components' in p1:
         comp = p1['components']
@@ -149,14 +149,14 @@ def test_detailed_analysis():
               f"regime={comp.get('hmm', {}).get('regime', 'N/A')}")
     
     # Phase 2
-    print(f"\n--- Phase 2: Network ---")
+    print(f"\n--- Network ---")
     p2 = details.get('network', {})
     stats = p2.get('network_stats', {})
     print(f"Network Density: {stats.get('density', 0):.3f}")
     print(f"Nodes: {stats.get('nodes', 0)}, Edges: {stats.get('edges', 0)}")
     
     # Phase 3
-    print(f"\n--- Phase 3: Multivariate ---")
+    print(f"\n--- Multivariate ---")
     p3 = details.get('multivariate', {})
     print(f"Risk Level: {p3.get('risk_level', 'N/A')}")
     leaders = p3.get('leading_indicators', [])
@@ -164,7 +164,7 @@ def test_detailed_analysis():
         print(f"Leading Indicators: {[l[0] for l in leaders[:3]]}")
     
     # Phase 4
-    print(f"\n--- Phase 4: Pattern ---")
+    print(f"\n--- Pattern ---")
     p4 = details.get('pattern', {})
     print(f"Regime: {p4.get('regime', 'N/A')}")
     print(f"Action: {p4.get('regime_action', 'N/A')}")

@@ -1,4 +1,4 @@
-"""Phase 1: Time Series Foundation - ARIMA, Kalman, HMM, Statistics"""
+"""Time Series Foundation - ARIMA, Kalman, HMM, Statistics"""
 from .arima_model import ARIMAModel
 from .kalman_filter import KalmanFilter
 from .hmm_regime import HMMRegimeDetector

@@ -1,9 +1,9 @@
-"""Test Phase 1: Foundation Signals"""
+"""Test Foundation Signals"""
 import numpy as np
 import sys
 sys.path.insert(0, '..')
 
-from phase1_foundation import (
+from foundation import (
     ARIMAModel, KalmanFilter, HMMRegimeDetector,
     StationarityTest, PCAAnalyzer, FoundationSignals
 )
@@ -124,5 +124,5 @@ if __name__ == '__main__':
     test_foundation_signals()
     
     print("\n" + "=" * 50)
-    print("Phase 1 Tests Completed!")
+    print("Foundation Tests Completed!")
     print("=" * 50)

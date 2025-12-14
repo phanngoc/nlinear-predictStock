@@ -31,7 +31,7 @@ python deep_analyze.py FPT
 │                        TRADING ENGINE                                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  Phase 1          Phase 2          Phase 3          Phase 4          Phase 5│
+│  Module 1         Module 2         Module 3         Module 4         Module 5│
 │  Foundation       Network          Multivariate     Pattern          Crypto │
 │  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌────────┐│
 │  │ ARIMA    │    │ Corr Net │    │ VAR/VECM │    │ Regime   │    │On-chain││
@@ -68,32 +68,32 @@ trading_system/
 ├── demo.py                    # Demo script
 ├── README.md
 │
-├── phase1_foundation/         # Time Series & Statistics
+├── foundation/                # Time Series & Statistics
 │   ├── arima_model.py        # ARIMA forecasting
 │   ├── kalman_filter.py      # Noise filtering
 │   ├── hmm_regime.py         # Regime detection
 │   ├── statistics.py         # Stationarity, PCA
-│   └── foundation_signals.py # Aggregate Phase 1
+│   └── foundation_signals.py # Aggregate Foundation
 │
-├── phase2_network/            # Network Analysis
+├── network/                   # Network Analysis
 │   ├── correlation_network.py # Build correlation graphs
 │   ├── network_metrics.py    # Centrality, clustering
 │   ├── lead_lag_detector.py  # Lead-lag relationships
-│   └── network_signals.py    # Aggregate Phase 2
+│   └── network_signals.py    # Aggregate Network
 │
-├── phase3_multivariate/       # Multivariate Modeling
+├── multivariate/              # Multivariate Modeling
 │   ├── var_model.py          # VAR/VECM
 │   ├── granger_causality.py  # Causality analysis
 │   ├── copula_model.py       # Tail dependencies
 │   └── multivariate_signals.py
 │
-├── phase4_pattern/            # Pattern Hunting
+├── pattern/                   # Pattern Hunting
 │   ├── regime_detector.py    # 4-state regime
 │   ├── factor_model.py       # Hidden factors
 │   ├── anomaly_detector.py   # Statistical anomalies
 │   └── pattern_signals.py
 │
-├── phase5_crypto/             # Crypto-specific
+├── crypto/                    # Crypto-specific
 │   └── crypto_signals.py     # On-chain, DEX, social
 │
 └── core/                      # Core modules
@@ -124,9 +124,9 @@ scan = engine.scan_market(prices_df, top_n=5)
 print("Buy opportunities:", scan['buy_opportunities'])
 ```
 
-## 📈 Phase Details
+## 📈 Module Details
 
-### Phase 1: Foundation (25% weight)
+### Foundation (25% weight)
 | Component | Purpose | Signal |
 |-----------|---------|--------|
 | ARIMA | Short-term forecast | Direction |
@@ -134,7 +134,7 @@ print("Buy opportunities:", scan['buy_opportunities'])
 | HMM | Regime detection | Bull/Bear/Sideways |
 | PCA | Factor extraction | Hidden drivers |
 
-### Phase 2: Network (20% weight)
+### Network (20% weight)
 | Component | Purpose | Signal |
 |-----------|---------|--------|
 | Correlation Network | Market structure | Density change |
@@ -142,7 +142,7 @@ print("Buy opportunities:", scan['buy_opportunities'])
 | Lead-Lag | Predictive pairs | Trade laggers |
 | Clustering | Sector groups | Diversification |
 
-### Phase 3: Multivariate (20% weight)
+### Multivariate (20% weight)
 | Component | Purpose | Signal |
 |-----------|---------|--------|
 | VAR | Cross-asset forecast | Multi-asset prediction |
@@ -150,14 +150,14 @@ print("Buy opportunities:", scan['buy_opportunities'])
 | Copula | Tail dependency | Crash risk |
 | G-Lasso | Sparse correlation | True relationships |
 
-### Phase 4: Pattern (25% weight)
+### Pattern (25% weight)
 | Component | Purpose | Signal |
 |-----------|---------|--------|
 | 4-State Regime | Bull/Bear × High/Low Vol | Position sizing |
 | Factor Model | Hidden factors | Alpha from residuals |
 | Anomaly | Statistical arbitrage | Mean reversion |
 
-### Phase 5: Crypto (10% weight)
+### Crypto (10% weight)
 | Component | Purpose | Signal |
 |-----------|---------|--------|
 | Exchange Flow | Inflow/Outflow | Accumulation/Distribution |
